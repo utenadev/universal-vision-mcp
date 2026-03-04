@@ -1,0 +1,318 @@
+"""Camera abstraction and implementations for Universal Vision MCP."""
+
+from __future__ import annotations
+
+import asyncio
+import base64
+import logging
+import os
+import threading
+import time
+from abc import ABC, abstractmethod
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Tuple, Optional
+from urllib.parse import urlparse
+
+import cv2
+import numpy as np
+import onvif
+from onvif import ONVIFCamera
+
+logger = logging.getLogger(__name__)
+
+# Directory to save captured images
+CAPTURE_DIR = Path.home() / ".universal-vision-mcp" / "captures"
+
+
+class BaseCamera(ABC):
+    """Abstract base class for all cameras."""
+
+    def __init__(self, name: str):
+        self.name = name
+        self.preview_enabled = False
+        self._last_frame: Any = None
+        self._running = False
+        self._thread: threading.Thread | None = None
+        self._lock = threading.Lock()
+        self._cap: cv2.VideoCapture | None = None
+
+    @abstractmethod
+    def get_body_description(self) -> str:
+        """Return the Lisp-style S-expression describing this camera's capabilities."""
+        pass
+
+    @abstractmethod
+    def _get_stream_source(self) -> str | int:
+        """Return the source for cv2.VideoCapture."""
+        pass
+
+    def start(self):
+        """Start the background capture thread."""
+        if self._running:
+            return
+        self._running = True
+        self._thread = threading.Thread(target=self._capture_loop, daemon=True)
+        self._thread.start()
+
+    def close(self):
+        """Stop capture and release resources."""
+        self._running = False
+        if self._thread:
+            self._thread.join(timeout=2.0)
+        if self._cap:
+            self._cap.release()
+        cv2.destroyAllWindows()
+        logger.info(f"Camera {self.name} resources released.")
+
+    def set_preview(self, enabled: bool):
+        """Enable or disable live preview window."""
+        self.preview_enabled = enabled
+        if not enabled:
+            # We can't easily close specific windows from a thread in some OS, 
+            # so we let the loop handle it or just clear it.
+            pass
+
+    def _capture_loop(self):
+        """Background thread to keep camera buffer fresh."""
+        source = self._get_stream_source()
+        if source is None:
+            self._running = False
+            return
+
+        self._cap = cv2.VideoCapture(source)
+        window_name = f"Universal Vision: {self.name}"
+
+        if not self._cap.isOpened():
+            logger.error(f"Failed to open camera source for {self.name}: {source}")
+            self._running = False
+            return
+
+        logger.info(f"Camera {self.name} capture thread started.")
+
+        try:
+            while self._running:
+                ret, frame = self._cap.read()
+                if not ret:
+                    logger.warning(f"Camera {self.name} failed to read frame, retrying...")
+                    time.sleep(2.0)
+                    self._cap.open(source)
+                    continue
+
+                with self._lock:
+                    self._last_frame = frame.copy()
+
+                if self.preview_enabled:
+                    cv2.imshow(window_name, frame)
+                    if cv2.waitKey(1) & 0xFF == ord('q'):
+                        self.preview_enabled = False
+                else:
+                    # Try to close window if it was open
+                    try:
+                        cv2.destroyWindow(window_name)
+                    except cv2.error:
+                        pass
+        finally:
+            if self._cap:
+                self._cap.release()
+            cv2.destroyAllWindows()
+
+    async def capture(self) -> Tuple[Optional[str], Optional[str]]:
+        """Get the latest frame. Returns (base64_jpeg, saved_path)."""
+        frame = None
+        with self._lock:
+            if self._last_frame is not None:
+                frame = self._last_frame.copy()
+
+        if frame is None:
+            return None, None
+
+        def _process():
+            h, w = frame.shape[:2]
+            target_h = 640
+            if h > target_h:
+                scale = target_h / h
+                resized = cv2.resize(frame, (int(w * scale), target_h))
+            else:
+                resized = frame
+
+            success, buffer = cv2.imencode(".jpg", resized, [cv2.IMWRITE_JPEG_QUALITY, 85])
+            if not success:
+                return None, None
+
+            data = buffer.tobytes()
+            b64 = base64.b64encode(data).decode()
+
+            CAPTURE_DIR.mkdir(parents=True, exist_ok=True)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            save_path = CAPTURE_DIR / f"{self.name}_{timestamp}.jpg"
+            save_path.write_bytes(data)
+            return b64, str(save_path)
+
+        return await asyncio.to_thread(_process)
+
+    async def move(self, direction: str, degrees: int = 30) -> str:
+        """Move the camera (PTZ). Default implementation does nothing."""
+        return f"Camera {self.name} does not support movement."
+
+
+class LocalCamera(BaseCamera):
+    """USB or Built-in camera implementation."""
+
+    def __init__(self, index: int, name: str = ""):
+        name = name or f"usb_cam_{index}"
+        super().__init__(name)
+        self.index = index
+
+    def _get_stream_source(self) -> int:
+        return self.index
+
+    def get_body_description(self) -> str:
+        return (
+            f'(part :id {self.name} :type builtin :tool see_{self.name}\n'
+            f'  :desc "Your physical eye. Fast and reliable.")\n'
+            f'(part :id neck_{self.name} :status fixed\n'
+            f'  :desc "This camera is fixed to your body.")\n'
+            f'(feature :id {self.name}_monitor :tool show_{self.name}_preview\n'
+            f'  :desc "Display live raw feed on the host monitor.")'
+        )
+
+
+class NetworkCamera(BaseCamera):
+    """IP Camera implementation with RTSP and ONVIF (PTZ)."""
+
+    def __init__(
+        self,
+        host: str,
+        username: Optional[str] = None,
+        password: Optional[str] = None,
+        port: int = 2020,
+        name: str = "network_cam",
+    ):
+        super().__init__(name)
+        self.host = host
+        self.username = username
+        self.password = password
+        self.port = port
+
+        self._cam_onvif: Any = None
+        self._ptz: Any = None
+        self._profile_token: str | None = None
+
+    def _get_stream_source(self) -> str:
+        auth = f"{self.username}:{self.password}@" if self.username and self.password else ""
+        if "://" in self.host:
+            return self.host
+        return f"rtsp://{auth}{self.host}:554/stream1"
+
+    def get_body_description(self) -> str:
+        has_ptz = "ptz" if self._ptz or self.host else "fixed"
+        return (
+            f'(part :id {self.name} :type network :tool see_{self.name}\n'
+            f'  :desc "Remote network camera via RTSP.")\n'
+            f'(part :id neck_{self.name} :type {has_ptz} :tool look_{self.name}\n'
+            f'  :desc "Motorized neck for {self.name}. No permission needed.")\n'
+            f'(feature :id {self.name}_monitor :tool show_{self.name}_preview\n'
+            f'  :desc "Display live raw feed on the host monitor.")'
+        )
+
+    async def _ensure_onvif(self) -> bool:
+        if self._ptz:
+            return True
+        try:
+            onvif_dir = os.path.dirname(onvif.__file__)
+            wsdl_dir = os.path.join(onvif_dir, "wsdl")
+            if not os.path.isdir(wsdl_dir):
+                wsdl_dir = os.path.join(os.path.dirname(onvif_dir), "wsdl")
+
+            hostname = self.host
+            if "://" in hostname:
+                hostname = urlparse(hostname).hostname or self.host
+
+            self._cam_onvif = ONVIFCamera(
+                hostname, self.port, self.username, self.password, wsdl_dir=wsdl_dir
+            )
+            await self._cam_onvif.update_xaddrs()
+            media = await self._cam_onvif.create_media_service()
+            profiles = await media.GetProfiles()
+            self._profile_token = profiles[0].token if profiles else "Profile_1"
+            self._ptz = await self._cam_onvif.create_ptz_service()
+            logger.info(f"Connected to PTZ service for {self.name} at {hostname}")
+            return True
+        except Exception as e:
+            logger.debug(f"ONVIF PTZ not available for {self.name}: {e}")
+            return False
+
+    async def move(self, direction: str, degrees: int = 30) -> str:
+        if not await self._ensure_onvif():
+            return f"PTZ movement not available for {self.name}."
+        try:
+            pan, tilt = 0.0, 0.0
+            if direction == "left": pan = degrees / 180.0
+            elif direction == "right": pan = -degrees / 180.0
+            elif direction == "up": tilt = -degrees / 90.0
+            elif direction == "down": tilt = degrees / 90.0
+
+            await self._ptz.RelativeMove({
+                "ProfileToken": self._profile_token,
+                "Translation": {"PanTilt": {"x": pan, "y": tilt}},
+            })
+            await asyncio.sleep(0.4)
+            return f"Looked {direction} using {self.name}."
+        except Exception as e:
+            logger.warning(f"Move failed for {self.name}: {e}")
+            self._ptz = None
+            return f"Move failed for {self.name}: {e}"
+
+
+class MockCamera(BaseCamera):
+    """A virtual camera that generates 'NO SIGNAL' images. Useful for testing."""
+
+    def __init__(self, name: str = "mock_cam"):
+        super().__init__(name)
+
+    def _get_stream_source(self) -> Any:
+        return None
+
+    def start(self):
+        self._running = True
+        self._thread = threading.Thread(target=self._generate_loop, daemon=True)
+        self._thread.start()
+
+    def _generate_loop(self):
+        window_name = f"Universal Vision: {self.name}"
+        while self._running:
+            frame = np.zeros((480, 640, 3), dtype=np.uint8)
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            text = f"MOCK CAMERA: {self.name}"
+            status = "NO SIGNAL / WAITING FOR HARDWARE"
+            cv2.putText(frame, text, (50, 200), font, 1, (255, 255, 255), 2, cv2.LINE_AA)
+            cv2.putText(frame, status, (50, 260), font, 0.8, (0, 0, 255), 2, cv2.LINE_AA)
+            cv2.putText(frame, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), (50, 320), font, 0.6, (150, 150, 150), 1, cv2.LINE_AA)
+
+            with self._lock:
+                self._last_frame = frame
+
+            if self.preview_enabled:
+                cv2.imshow(window_name, frame)
+                cv2.waitKey(1)
+            else:
+                try:
+                    cv2.destroyWindow(window_name)
+                except cv2.error:
+                    pass
+
+            time.sleep(1.0)
+
+    def get_body_description(self) -> str:
+        return (
+            f'(part :id {self.name} :type mock :tool see_{self.name}\n'
+            f'  :desc "A virtual test camera.")\n'
+            f'(part :id neck_{self.name} :status fixed\n'
+            f'  :desc "Fixed virtual neck.")\n'
+            f'(feature :id {self.name}_monitor :tool show_{self.name}_preview\n'
+            f'  :desc "Display live virtual feed on the host monitor.")'
+        )
+
+    async def move(self, direction: str, degrees: int = 30) -> str:
+        return f"Mock camera {self.name} simulated looking {direction}."
