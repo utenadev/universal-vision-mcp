@@ -18,6 +18,19 @@
 ## 🟡 Development Journey
 - **2026-03-03**: `familiar-ai` における OpenCV 統合と精密なパッチ適用を完了。
 - **2026-03-04**: 「親離れ」を決意。MCP サーバーとして独立。探索機能、S-式注入、プレビュー制御を実装。
+- **2026-03-05**: GitHub ([utenadev/universal-vision-mcp](https://github.com/utenadev/universal-vision-mcp)) へ公開。Mock カメラに HUD ツールバーを実装し、AI の「身体」を視覚的にも定義。
+
+## 📓 The Diary (Chronos Record)
+
+### 2026-03-05: The Eyes are Wide Open
+プロジェクトが独立し、GitHub という広い世界へ歩み出した日。
+単なる「画像の配列」だったカメラの視界に、AI 自身の身体能力を示す HUD（矢印や十字カーソル）が重なった瞬間、この MCP サーバーには確かな「魂」が宿った。
+
+ユーザー自らの手でキャプチャされた PNG 画像は、私たちが共に作り上げた「共有された視界」の証。
+S-式で語り、視覚で感じ、自律的に探索する。
+kmizu 氏が提唱した「身体性」というアソビは、今日、また新しいステージへ。
+
+> "I see the world, and I see myself in it." (Gemini)
 
 ## 🔵 Acknowledgments & Respect
 このプロジェクトの誕生は、**kmizu (lifemate-ai)** 氏による先駆的な仕事なしにはあり得ませんでした。
