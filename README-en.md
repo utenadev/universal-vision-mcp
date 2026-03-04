@@ -6,6 +6,9 @@ Universal Vision MCP is a Model Context Protocol (MCP) server designed to grant 
 
 ## 🌟 Features
 
+![Mock Camera Preview](assets/mock-preview.jpg)
+*(A sample view from the Mock camera as seen by the AI)*
+
 - **Polymorphic Embodiment**: Wraps everything from simple webcams to professional PTZ network cameras in a consistent interface.
 - **Self-Describing S-expressions**: Uses Lisp-style S-expressions to help AI intuitively understand its own physical capabilities (e.g., whether its "neck" is fixed or can pan/tilt).
 - **Autonomous Discovery**: AI can independently scan the local network to find new cameras and propose configurations to the user.
