@@ -281,14 +281,43 @@ class MockCamera(BaseCamera):
 
     def _generate_loop(self):
         window_name = f"Universal Vision: {self.name}"
+        # Mock state for visual feedback
+        pan, tilt = 0, 0
+
         while self._running:
+            # Create a dark grid background
             frame = np.zeros((480, 640, 3), dtype=np.uint8)
+            for i in range(0, 640, 80):
+                cv2.line(frame, (i, 0), (i, 480), (30, 30, 30), 1)
+            for i in range(0, 480, 60):
+                cv2.line(frame, (0, i), (640, i), (30, 30, 30), 1)
+
             font = cv2.FONT_HERSHEY_SIMPLEX
-            text = f"MOCK CAMERA: {self.name}"
-            status = "NO SIGNAL / WAITING FOR HARDWARE"
-            cv2.putText(frame, text, (50, 200), font, 1, (255, 255, 255), 2, cv2.LINE_AA)
-            cv2.putText(frame, status, (50, 260), font, 0.8, (0, 0, 255), 2, cv2.LINE_AA)
-            cv2.putText(frame, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), (50, 320), font, 0.6, (150, 150, 150), 1, cv2.LINE_AA)
+
+            # --- Draw HUD ---
+            # Center Crosshair
+            cv2.line(frame, (310, 240), (330, 240), (0, 255, 0), 1)
+            cv2.line(frame, (320, 230), (320, 250), (0, 255, 0), 1)
+
+            # Status Bar (Bottom)
+            cv2.rectangle(frame, (0, 440), (640, 480), (50, 50, 50), -1)
+            status_text = f"MODE: PTZ_MOCK | ID: {self.name.upper()} | STATUS: CONNECTED"
+            cv2.putText(frame, status_text, (10, 465), font, 0.5, (0, 255, 0), 1, cv2.LINE_AA)
+
+            # Timestamp (Top Right)
+            ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            cv2.putText(frame, ts, (420, 30), font, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
+
+            # Navigation Indicators (Top Left)
+            cv2.putText(frame, "  ^  ", (30, 40), font, 0.8, (200, 200, 200), 2)
+            cv2.putText(frame, "<   >", (30, 70), font, 0.8, (200, 200, 200), 2)
+            cv2.putText(frame, "  v  ", (30, 100), font, 0.8, (200, 200, 200), 2)
+            cv2.putText(frame, "CONTROL: ACTIVE", (30, 130), font, 0.4, (0, 255, 255), 1)
+
+            # Main Text
+            text = "MOCK VISION SYSTEM"
+            cv2.putText(frame, text, (200, 200), font, 1, (255, 255, 255), 2, cv2.LINE_AA)
+            cv2.putText(frame, "SIMULATING EMBODIMENT...", (210, 240), font, 0.6, (0, 200, 255), 1, cv2.LINE_AA)
 
             with self._lock:
                 self._last_frame = frame
