@@ -59,8 +59,16 @@ async def sync_cameras():
         except Exception as e:
             logger.error(f"Failed to start camera {settings.name}: {e}")
 
-    # Fallback
-    if not cameras and not any(name.startswith("mock_") for name in cameras):
+    # Manage Mock camera: only keep it if no real cameras exist
+    mock_names = [name for name in cameras if name.startswith("mock_")]
+    real_names = [name for name in cameras if not name.startswith("mock_")]
+    
+    if real_names and mock_names:
+        for name in mock_names:
+            cameras[name].close()
+            del cameras[name]
+            logger.info(f"Removed mock camera as real cameras are active: {name}")
+    elif not real_names and not mock_names:
         logger.info("No cameras active. Adding a MockCamera for exploration.")
         mock = MockCamera("setup_eye")
         mock.start()
@@ -161,7 +169,14 @@ async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> List[types.T
         config.cameras.append(settings)
         config.save()
         await sync_cameras()
-        return [types.TextContent(type="text", text=f"Camera '{settings.name}' (sanitized as '{sanitized_new}') configured.")]
+        return [types.TextContent(
+            type="text", 
+            text=(
+                f"Camera '{settings.name}' (sanitized as '{sanitized_new}') configured and started.\n"
+                f"NEW TOOLS AVAILABLE: see_{sanitized_new}, preview_{sanitized_new}.\n"
+                "Please RE-LIST or RE-SCAN TOOLS to see the new capabilities in your interface."
+            )
+        )]
 
     # --- Camera Operations ---
     if name.startswith("see_"):
