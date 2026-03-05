@@ -123,21 +123,21 @@ def setup(
   }}
 }}
 """
-        console.print(Panel(config_json.strip(), border_style="green"))
+        console.print(config_json.strip())
         if "\\" in uvx_raw:
-            console.print("[dim]Tip: Full path used for Windows compatibility.[/]")
+            console.print("\n[dim]Tip: Full path used for Windows compatibility.[/]")
         return
 
     if cmd_cc:
         console.print("\n[bold cyan]Claude Code Registration Command:[/]")
         console.print(f"Run this command in your terminal:")
-        console.print(Panel(f"claude mcp add universal-vision {uvx_raw} --from git+{current_git_url} universal-vision-mcp run", border_style="green"))
+        console.print(f"\nclaude mcp add universal-vision {uvx_raw} --from git+{current_git_url} universal-vision-mcp run\n")
         return
 
     if cmd_gemini:
         console.print("\n[bold cyan]Gemini Registration (gemini-cli):[/]")
-        console.print("If you are using Gemini CLI, you can register it using your environment setup.")
-        console.print(Panel(f"{uvx_raw} --from git+{current_git_url} universal-vision-mcp run", border_style="green"))
+        console.print("If you are using Gemini CLI, you can register it using your environment setup:")
+        console.print(f"\n{uvx_raw} --from git+{current_git_url} universal-vision-mcp run\n")
         return
 
     if export_setup:
