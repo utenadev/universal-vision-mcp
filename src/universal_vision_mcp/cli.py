@@ -93,8 +93,13 @@ def setup(
 ):
     """Interactive setup for your cameras or show registration commands."""
     
-    # Try to find the full path of uvx for better reliability on Windows
+    # Try to find the full path of uvx and uv for better reliability on Windows
     uvx_raw = shutil.which("uvx") or "uvx"
+    uv_raw = shutil.which("uv") or "uv"
+    
+    # Get the directory of uv to add to PATH if needed
+    uv_dir = os.path.dirname(uv_raw) if uv_raw and os.path.isabs(uv_raw) else ""
+    
     # For JSON backslashes need to be escaped
     uvx_path = uvx_raw.replace("\\", "\\\\")
     
@@ -105,6 +110,15 @@ def setup(
     if cmd_cd:
         console.print("\n[bold cyan]Claude Desktop Configuration (JSON snippet):[/]")
         console.print("Add this to your `claude_desktop_config.json`:")
+        
+        # Build env section
+        env_json = '{\n        "CAMERA_INDEX": "0"'
+        if uv_dir:
+            # Escape backslashes for the PATH string inside JSON
+            escaped_uv_dir = uv_dir.replace("\\", "\\\\")
+            env_json += f',\n        "PATH": "{escaped_uv_dir};%PATH%"'
+        env_json += '\n      }'
+
         config_json = f"""
 {{
   "mcpServers": {{
@@ -116,9 +130,7 @@ def setup(
         "universal-vision-mcp",
         "run"
       ],
-      "env": {{
-        "CAMERA_INDEX": "0"
-      }}
+      "env": {env_json}
     }}
   }}
 }}
