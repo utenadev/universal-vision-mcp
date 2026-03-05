@@ -192,12 +192,13 @@ class LocalCamera(BaseCamera):
 
     def get_body_description(self) -> str:
         return (
+            f'(body :id {self.sanitized_name}_system :role "Primary Visual Organ")\n'
             f'(part :id {self.sanitized_name} :type builtin :tool see_{self.sanitized_name}\n'
-            f'  :desc "Your physical eye. Fast and reliable.")\n'
+            f'  :desc "Your physical eye. Use this tool to OBSERVE the world.")\n'
             f'(part :id neck_{self.sanitized_name} :status fixed\n'
-            f'  :desc "This camera is fixed to your body.")\n'
+            f'  :desc "Fixed neck. You cannot move this camera.")\n'
             f'(feature :id {self.sanitized_name}_monitor :tool preview_{self.sanitized_name}\n'
-            f'  :desc "Display live raw feed on the host monitor.")'
+            f'  :desc "Display your live feed on the human\'s host monitor.")'
         )
 
 
@@ -230,13 +231,15 @@ class NetworkCamera(BaseCamera):
 
     def get_body_description(self) -> str:
         has_ptz = "ptz" if self._ptz or self.host else "fixed"
+        movement_desc = "You can pan/tilt this eye." if has_ptz == "ptz" else "Fixed neck."
         return (
+            f'(body :id {self.sanitized_name}_system :role "Remote Visual Organ")\n'
             f'(part :id {self.sanitized_name} :type network :tool see_{self.sanitized_name}\n'
-            f'  :desc "Remote network camera via RTSP.")\n'
+            f'  :desc "Your remote eye. Use this to OBSERVE the target area.")\n'
             f'(part :id neck_{self.sanitized_name} :type {has_ptz} :tool look_{self.sanitized_name}\n'
-            f'  :desc "Motorized neck for {self.sanitized_name}. No permission needed.")\n'
+            f'  :desc "{movement_desc} Use look_{self.sanitized_name} to aim before you see.")\n'
             f'(feature :id {self.sanitized_name}_monitor :tool preview_{self.sanitized_name}\n'
-            f'  :desc "Display live raw feed on the host monitor.")'
+            f'  :desc "Display your live feed on the human\'s host monitor.")'
         )
 
     async def _ensure_onvif(self) -> bool:
@@ -358,12 +361,13 @@ class MockCamera(BaseCamera):
 
     def get_body_description(self) -> str:
         return (
+            f'(body :id {self.sanitized_name}_system :role "Virtual Visual Organ")\n'
             f'(part :id {self.sanitized_name} :type mock :tool see_{self.sanitized_name}\n'
-            f'  :desc "A virtual test camera.")\n'
+            f'  :desc "A virtual test camera. Use this to OBSERVE virtual test patterns.")\n'
             f'(part :id neck_{self.sanitized_name} :status fixed\n'
             f'  :desc "Fixed virtual neck.")\n'
             f'(feature :id {self.sanitized_name}_monitor :tool preview_{self.sanitized_name}\n'
-            f'  :desc "Display live virtual feed on the host monitor.")'
+            f'  :desc "Display your live virtual feed on the human\'s host monitor.")'
         )
 
     async def move(self, direction: str, degrees: int = 30) -> str:
