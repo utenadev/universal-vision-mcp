@@ -2,6 +2,7 @@
 
 import asyncio
 import os
+import shutil
 import sys
 from typing import Optional
 
@@ -92,6 +93,15 @@ def setup(
 ):
     """Interactive setup for your cameras or show registration commands."""
     
+    # Try to find the full path of uvx for better reliability on Windows
+    uvx_raw = shutil.which("uvx") or "uvx"
+    # For JSON backslashes need to be escaped
+    uvx_path = uvx_raw.replace("\\", "\\\\")
+    
+    # Point to the current fix branch for verification
+    branch_suffix = "@fix/tool-name-validation-and-features"
+    current_git_url = f"{GITHUB_URL}{branch_suffix}"
+
     if cmd_cd:
         console.print("\n[bold cyan]Claude Desktop Configuration (JSON snippet):[/]")
         console.print("Add this to your `claude_desktop_config.json`:")
@@ -99,10 +109,10 @@ def setup(
 {{
   "mcpServers": {{
     "universal-vision": {{
-      "command": "uvx",
+      "command": "{uvx_path}",
       "args": [
         "--from",
-        "git+{GITHUB_URL}",
+        "git+{current_git_url}",
         "universal-vision-mcp",
         "run"
       ],
@@ -114,18 +124,20 @@ def setup(
 }}
 """
         console.print(Panel(config_json.strip(), border_style="green"))
+        if "\\" in uvx_raw:
+            console.print("[dim]Tip: Full path used for Windows compatibility.[/]")
         return
 
     if cmd_cc:
         console.print("\n[bold cyan]Claude Code Registration Command:[/]")
         console.print(f"Run this command in your terminal:")
-        console.print(Panel(f"claude mcp add universal-vision uvx --from git+{GITHUB_URL} universal-vision-mcp run", border_style="green"))
+        console.print(Panel(f"claude mcp add universal-vision {uvx_raw} --from git+{current_git_url} universal-vision-mcp run", border_style="green"))
         return
 
     if cmd_gemini:
         console.print("\n[bold cyan]Gemini Registration (gemini-cli):[/]")
         console.print("If you are using Gemini CLI, you can register it using your environment setup.")
-        console.print(Panel(f"uvx --from git+{GITHUB_URL} universal-vision-mcp run", border_style="green"))
+        console.print(Panel(f"{uvx_raw} --from git+{current_git_url} universal-vision-mcp run", border_style="green"))
         return
 
     if export_setup:
