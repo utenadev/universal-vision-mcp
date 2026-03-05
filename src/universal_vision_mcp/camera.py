@@ -198,7 +198,7 @@ class LocalCamera(BaseCamera):
             f'(part :id neck_{self.sanitized_name} :status fixed\n'
             f'  :desc "Fixed neck. You cannot move this camera.")\n'
             f'(feature :id {self.sanitized_name}_monitor :tool preview_{self.sanitized_name}\n'
-            f'  :desc "Display your live feed on the human\'s host monitor.")'
+            f'  :desc "Display your live feed on the host monitor.")'
         )
 
 
@@ -239,7 +239,7 @@ class NetworkCamera(BaseCamera):
             f'(part :id neck_{self.sanitized_name} :type {has_ptz} :tool look_{self.sanitized_name}\n'
             f'  :desc "{movement_desc} Use look_{self.sanitized_name} to aim before you see.")\n'
             f'(feature :id {self.sanitized_name}_monitor :tool preview_{self.sanitized_name}\n'
-            f'  :desc "Display your live feed on the human\'s host monitor.")'
+            f'  :desc "Display your live feed on the host monitor.")'
         )
 
     async def _ensure_onvif(self) -> bool:
@@ -367,7 +367,7 @@ class MockCamera(BaseCamera):
             f'(part :id neck_{self.sanitized_name} :status fixed\n'
             f'  :desc "Fixed virtual neck.")\n'
             f'(feature :id {self.sanitized_name}_monitor :tool preview_{self.sanitized_name}\n'
-            f'  :desc "Display your live virtual feed on the human\'s host monitor.")'
+            f'  :desc "Display your live virtual feed on the host monitor.")'
         )
 
     async def move(self, direction: str, degrees: int = 30) -> str:
