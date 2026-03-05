@@ -10,7 +10,7 @@ from mcp.server.models import InitializationOptions
 import mcp.types as types
 import mcp.server.stdio
 
-from .camera import LocalCamera, NetworkCamera, MockCamera, BaseCamera
+from .camera import LocalCamera, NetworkCamera, MockCamera, BaseCamera, sanitize_name
 from .config import AppConfig, CameraSettings
 from .scanner import discover_cameras
 
@@ -28,8 +28,8 @@ async def sync_cameras():
     config = AppConfig.load()
     
     # Identify cameras to remove
-    current_names = {s.name for s in config.cameras}
-    to_remove = [name for name in cameras if name not in current_names and not name.startswith("mock_")]
+    current_sanitized_names = {sanitize_name(s.name) for s in config.cameras}
+    to_remove = [name for name in cameras if name not in current_sanitized_names and not name.startswith("mock_")]
     for name in to_remove:
         cameras[name].close()
         del cameras[name]
@@ -37,7 +37,8 @@ async def sync_cameras():
 
     # Identify or update cameras to add
     for settings in config.cameras:
-        if settings.name in cameras:
+        sanitized = sanitize_name(settings.name)
+        if sanitized in cameras:
             continue
             
         try:
@@ -53,8 +54,8 @@ async def sync_cameras():
                     name=settings.name
                 )
             cam.start()
-            cameras[cam.name] = cam
-            logger.info(f"Started camera: {cam.name} ({settings.type})")
+            cameras[cam.sanitized_name] = cam
+            logger.info(f"Started camera: {cam.name} (as {cam.sanitized_name}, {settings.type})")
         except Exception as e:
             logger.error(f"Failed to start camera {settings.name}: {e}")
 
@@ -63,7 +64,7 @@ async def sync_cameras():
         logger.info("No cameras active. Adding a MockCamera for exploration.")
         mock = MockCamera("setup_eye")
         mock.start()
-        cameras[mock.name] = mock
+        cameras[mock.sanitized_name] = mock
 
 
 @server.list_tools()
@@ -73,20 +74,21 @@ async def handle_list_tools() -> List[types.Tool]:
     
     # 1. Camera Tools
     for name, cam in cameras.items():
+        # 'name' is already sanitized as it's the key
         body_desc = cam.get_body_description()
         
         # See Tool
         tools.append(types.Tool(
             name=f"see_{name}",
-            description=f"Capture a visual observation from {name}.\n\nBODY DEFINITION:\n{body_desc}",
+            description=f"Capture a visual observation from {cam.name} ({name}).\n\nBODY DEFINITION:\n{body_desc}",
             inputSchema={"type": "object", "properties": {}}
         ))
         
         # Look Tool
-        if ":tool look" in body_desc:
+        if f":tool look_{name}" in body_desc:
             tools.append(types.Tool(
                 name=f"look_{name}",
-                description=f"Turn the neck of {name} in a specified direction.\n\nBODY DEFINITION:\n{body_desc}",
+                description=f"Turn the neck of {cam.name} ({name}) in a specified direction.\n\nBODY DEFINITION:\n{body_desc}",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -97,10 +99,10 @@ async def handle_list_tools() -> List[types.Tool]:
                 }
             ))
             
-        # Preview Tool (New!)
+        # Preview Tool
         tools.append(types.Tool(
             name=f"preview_{name}",
-            description=f"Enable or disable a live raw feed window on the host monitor for {name}.\n\nBODY DEFINITION:\n{body_desc}",
+            description=f"Enable or disable a live raw feed window on the host monitor for {cam.name} ({name}).\n\nBODY DEFINITION:\n{body_desc}",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -153,11 +155,13 @@ async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> List[types.T
     elif name == "configure_camera":
         config = AppConfig.load()
         settings = CameraSettings(**arguments)
-        config.cameras = [c for c in config.cameras if c.name != settings.name]
+        # Use sanitized name for identifying the camera to replace/update
+        sanitized_new = sanitize_name(settings.name)
+        config.cameras = [c for c in config.cameras if sanitize_name(c.name) != sanitized_new]
         config.cameras.append(settings)
         config.save()
         await sync_cameras()
-        return [types.TextContent(type="text", text=f"Camera '{settings.name}' configured.")]
+        return [types.TextContent(type="text", text=f"Camera '{settings.name}' (sanitized as '{sanitized_new}') configured.")]
 
     # --- Camera Operations ---
     if name.startswith("see_"):
@@ -166,7 +170,7 @@ async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> List[types.T
             b64, path = await cameras[cam_name].capture()
             if b64:
                 return [
-                    types.TextContent(type="text", text=f"Captured from {cam_name}."),
+                    types.TextContent(type="text", text=f"Captured from {cameras[cam_name].name}."),
                     types.ImageContent(type="image", data=b64, mimeType="image/jpeg")
                 ]
             return [types.TextContent(type="text", text="Failed to capture.")]
@@ -183,7 +187,7 @@ async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> List[types.T
             enabled = arguments.get("enabled", False)
             cameras[cam_name].set_preview(enabled)
             status = "enabled" if enabled else "disabled"
-            return [types.TextContent(type="text", text=f"Live preview for {cam_name} {status}.")]
+            return [types.TextContent(type="text", text=f"Live preview for {cameras[cam_name].name} {status}.")]
 
     return [types.TextContent(type="text", text=f"Unknown tool: {name}")]
 async def main():

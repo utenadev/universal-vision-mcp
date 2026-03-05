@@ -1,86 +1,93 @@
 # Universal Vision MCP 👁️
 
-> **「あらゆるカメラを、AI の標準的な『目』と『首』に変える」**
+> **「あなたの AI に、本物の『目』と『首』を。」**
 
-Universal Vision MCP は、USB カメラ（内蔵カメラ）、ネットワークカメラ（RTSP/ONVIF）、さらには仮想カメラ（Mock）を統合し、AI エージェントに「身体性（Embodiment）」を授けるための Model Context Protocol (MCP) サーバーです。
+Universal Vision MCP は、あなたのパソコンに繋がったカメラを、AI（Claude など）が直接操作できるようにするためのツールです。
+これを使うと、AI はあなたの周りの景色を見たり、ネットワークカメラの首を振って辺りを見渡したりできるようになります。
 
-## 🌟 特徴
+## 🌟 なにができるの？
 
 ![Mock Camera Preview](assets/mock-preview.png)
-<br>*(AI が捉える Mock カメラの視界イメージ)*
+<br>*(AI がカメラを通じて世界を見ているときのイメージ)*
 
-- **多態的な身体 (Polymorphism)**: USB カメラからプロ仕様の PTZ ネットワークカメラまで、同一のインターフェースでラップします。
-- **自己記述する S 式**: Lisp 形式の S 式を用いて、AI 自身に「今の自分の身体能力（首が振れるか、固定か等）」を直感的に理解させます。
-- **自律的な探索 (Autonomous Discovery)**: AI が自らローカルネットワークをスキャンし、新しいカメラを見つけ、ユーザーに設定を提案できます。
-- **ライブプレビュー**: AI の指示により、ホストマシン上に OpenCV のウィンドウを直接表示・非表示できます。
-- **親切な CLI**: `doctor`（診断）や `setup`（対話型設定）サブコマンドを備え、導入のハードルを極限まで下げています。
+- **いろんなカメラに対応**: パソコン内蔵のカメラ、USB カメラ、そしてネットワーク上の防犯カメラ（RTSP/ONVIF）まで、AI が同じように扱えます。
+- **AI が「自分の体」を理解**: AI は自分が「首を振れるカメラ（PTZ）」なのか「固定されたカメラ」なのかを自分で理解して行動します。
+- **自動で見つける**: AI がお家の中のネットワークをスキャンして、新しいカメラを自分で見つけるお手伝いもしてくれます。
+- **ライブ表示**: AI に「カメラを見せて」と頼むと、あなたの画面にリアルタイムの映像ウィンドウを表示します。
 
-## 🚀 はじめる
+## 🚀 かんたんな始め方（Claude Desktop で使う）
+
+難しいプログラムのダウンロードや設定は不要です。以下の手順ですぐに始められます。
 
 ### 1. [uv](https://docs.astral.sh/uv/) のインストール
-Python のパッケージ管理ツール `uv` をインストールします（未インストールの場合）。
+まずは、このツールを動かすための軽量な実行環境 `uv` を入れます（たった 1 行です）。
+
+**Windows (PowerShell):**
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+**macOS / Linux:**
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-### 2. クローンとセットアップ
+### 2. Claude Desktop への登録
+次に、以下のコマンドをターミナル（黒い画面）で実行してください。これだけで Claude に「目」が追加されます。
+
+```bash
+uvx --from git+https://github.com/utenadev/universal-vision-mcp universal-vision-mcp setup --setup-cmd-cd
+```
+
+画面に表示された **`mcpServers`** から始まる設定を、Claude Desktop の設定ファイル（`claude_desktop_config.json`）にコピー＆ペーストして Claude を再起動すれば完了です！
+
+## 🛠️ 便利な機能（困ったときは）
+
+インストールなしで、いつでも以下のコマンドで診断や設定ができます。
+
+```bash
+# カメラが正しく認識されているかチェック（診断）
+uvx --from git+https://github.com/utenadev/universal-vision-mcp universal-vision-mcp doctor --enable-netscan
+
+# ネットワークカメラを追加したり、設定を変更する
+uvx --from git+https://github.com/utenadev/universal-vision-mcp universal-vision-mcp setup
+```
+
+---
+
+## 👨‍💻 開発者の方へ (For Developers)
+
+自分で改造したり、ソースコードを読みたい方向けのステップです。
+
+### セットアップ
 ```bash
 git clone https://github.com/utenadev/universal-vision-mcp
 cd universal-vision-mcp
 uv sync
 ```
 
-### 3. ハードウェアの確認
+### 実行・診断
 ```bash
-# ハードウェアの診断と S 式（自己記述）のプレビュー
 uv run universal-vision-mcp doctor
-
-# カメラの対話型設定（ネットワークカメラ等を追加する場合）
-uv run universal-vision-mcp setup
-```
-
-### 4. 実行
-```bash
-# MCP サーバーの起動
 uv run universal-vision-mcp run
 ```
 
-Claude Desktop などの MCP クライアントから呼び出す場合は、`uv run universal-vision-mcp run` を起動コマンドとして設定してください。
+## 🧠 技術スタック & 設計思想
 
-## 🛠 技術スタック
+ここからは技術的なお話です。
 
-- **Python 3.11+**
-- **MCP Python SDK**: Model Context Protocol 準拠。
-- **OpenCV (opencv-python)**: 映像キャプチャ、画像処理、プレビュー表示。
-- **ONVIF (onvif-zeep-async)**: ネットワークカメラのパン・チルト・ズーム制御。
-- **Zeroconf / Scapy**: ネットワークデバイスの自動探索。
-- **Typer & Rich**: 美しく使いやすい CLI インターフェース。
+- **Python 3.11+ / MCP Python SDK**: Model Context Protocol 準拠。
+- **OpenCV**: 映像キャプチャとプレビュー表示。
+- **ONVIF**: ネットワークカメラの PTZ 制御。
+- **S 式による自己記述**: LLM に対して、以下のような身体記述をツール説明に注入します。
+  ```lisp
+  (part :id garden_cam :type network :tool see_garden_cam :desc "...")
+  ```
+  これにより、AI は単なる関数呼び出しではなく「自分には PTZ 対応の目があり、それを使って周囲を見渡せる」という**身体感覚（Embodiment）**を持って行動します。
 
-## 🧠 設計思想：S 式による自己定義
+## ❤️ 謝辞 (Acknowledgments)
 
-このサーバーは、ツール一覧を表示する際に以下のような身体記述（S 式）を各ツールの説明文に注入します。
-
-```lisp
-(part :id garden_cam :type network :tool see_garden_cam
-  :desc "Remote network camera via RTSP.")
-(part :id neck_garden_cam :type ptz :tool look_garden_cam
-  :desc "Motorized neck for garden_cam. No permission needed.")
-```
-
-これにより、LLM は単なる「関数」を呼び出すのではなく、「自分には PTZ 対応の目があり、それを使って周囲を見渡せる」という**身体感覚**を持って行動することが可能になります。
-
----
-
-## ❤️ Acknowledgments & Respect
-
-このプロジェクトの誕生は、**kmizu (lifemate-ai)** 氏による先駆的な仕事なしにはあり得ませんでした。
-
-- **`embodied-claude`** そして **`familiar-ai`** という、AI に実体（Embodiment）を持たせる試みの衝撃。
-- かつてエンジニアが夢見た **Lisp S-式** を通じた AI との対話という、懐かしくも新しいユーザー体験。
-- 私たちに「AI と共に生きる」という最高の **アソビ** を教えてくれたことに、心からの感謝を捧げます。
-
----
+このプロジェクトは、**kmizu (lifemate-ai)** 氏による先駆的な仕事（`embodied-claude`, `familiar-ai`）に深くインスパイアされています。AI に実体を持たせるという素晴らしい「アソビ」を提案してくださったことに、最大の敬意と感謝を捧げます。
 
 ## 📜 ライセンス
-
-MIT License - 自由なハックと進化を歓迎します。
+MIT License

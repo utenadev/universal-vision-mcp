@@ -19,10 +19,28 @@ import numpy as np
 import onvif
 from onvif import ONVIFCamera
 
+import re
+
 logger = logging.getLogger(__name__)
 
 # Directory to save captured images
 CAPTURE_DIR = Path.home() / ".universal-vision-mcp" / "captures"
+
+
+def sanitize_name(name: str) -> str:
+    """Sanitize a name to be a valid MCP tool name component.
+    
+    Allowed pattern: ^[a-zA-Z0-9_-]{1,64}$
+    We replace spaces and hyphens with underscores, and remove other invalid characters.
+    """
+    # Replace spaces and hyphens with underscores
+    name = name.replace(" ", "_").replace("-", "_")
+    # Remove any other characters that are not alphanumeric, underscore, or hyphen
+    name = re.sub(r"[^a-zA-Z0-9_-]", "", name)
+    # Ensure it's not empty and not too long
+    if not name:
+        name = "camera"
+    return name[:64]
 
 
 class BaseCamera(ABC):
@@ -30,6 +48,7 @@ class BaseCamera(ABC):
 
     def __init__(self, name: str):
         self.name = name
+        self.sanitized_name = sanitize_name(name)
         self.preview_enabled = False
         self._last_frame: Any = None
         self._running = False
@@ -145,11 +164,12 @@ class BaseCamera(ABC):
 
             CAPTURE_DIR.mkdir(parents=True, exist_ok=True)
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            save_path = CAPTURE_DIR / f"{self.name}_{timestamp}.jpg"
+            save_path = CAPTURE_DIR / f"{self.sanitized_name}_{timestamp}.jpg"
             save_path.write_bytes(data)
             return b64, str(save_path)
 
         return await asyncio.to_thread(_process)
+
 
     async def move(self, direction: str, degrees: int = 30) -> str:
         """Move the camera (PTZ). Default implementation does nothing."""
@@ -169,11 +189,11 @@ class LocalCamera(BaseCamera):
 
     def get_body_description(self) -> str:
         return (
-            f'(part :id {self.name} :type builtin :tool see_{self.name}\n'
+            f'(part :id {self.sanitized_name} :type builtin :tool see_{self.sanitized_name}\n'
             f'  :desc "Your physical eye. Fast and reliable.")\n'
-            f'(part :id neck_{self.name} :status fixed\n'
+            f'(part :id neck_{self.sanitized_name} :status fixed\n'
             f'  :desc "This camera is fixed to your body.")\n'
-            f'(feature :id {self.name}_monitor :tool show_{self.name}_preview\n'
+            f'(feature :id {self.sanitized_name}_monitor :tool preview_{self.sanitized_name}\n'
             f'  :desc "Display live raw feed on the host monitor.")'
         )
 
@@ -208,11 +228,11 @@ class NetworkCamera(BaseCamera):
     def get_body_description(self) -> str:
         has_ptz = "ptz" if self._ptz or self.host else "fixed"
         return (
-            f'(part :id {self.name} :type network :tool see_{self.name}\n'
+            f'(part :id {self.sanitized_name} :type network :tool see_{self.sanitized_name}\n'
             f'  :desc "Remote network camera via RTSP.")\n'
-            f'(part :id neck_{self.name} :type {has_ptz} :tool look_{self.name}\n'
-            f'  :desc "Motorized neck for {self.name}. No permission needed.")\n'
-            f'(feature :id {self.name}_monitor :tool show_{self.name}_preview\n'
+            f'(part :id neck_{self.sanitized_name} :type {has_ptz} :tool look_{self.sanitized_name}\n'
+            f'  :desc "Motorized neck for {self.sanitized_name}. No permission needed.")\n'
+            f'(feature :id {self.sanitized_name}_monitor :tool preview_{self.sanitized_name}\n'
             f'  :desc "Display live raw feed on the host monitor.")'
         )
 
@@ -335,11 +355,11 @@ class MockCamera(BaseCamera):
 
     def get_body_description(self) -> str:
         return (
-            f'(part :id {self.name} :type mock :tool see_{self.name}\n'
+            f'(part :id {self.sanitized_name} :type mock :tool see_{self.sanitized_name}\n'
             f'  :desc "A virtual test camera.")\n'
-            f'(part :id neck_{self.name} :status fixed\n'
+            f'(part :id neck_{self.sanitized_name} :status fixed\n'
             f'  :desc "Fixed virtual neck.")\n'
-            f'(feature :id {self.name}_monitor :tool show_{self.name}_preview\n'
+            f'(feature :id {self.sanitized_name}_monitor :tool preview_{self.sanitized_name}\n'
             f'  :desc "Display live virtual feed on the host monitor.")'
         )
 

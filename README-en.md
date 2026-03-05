@@ -1,86 +1,91 @@
 # Universal Vision MCP 👁️
 
-> **"Transform any camera into a standardized 'eye' and 'neck' for AI."**
+> **"Give your AI real 'eyes' and a 'neck'."**
 
-Universal Vision MCP is a Model Context Protocol (MCP) server designed to grant "Embodiment" to AI agents. It integrates USB cameras (built-in), network cameras (RTSP/ONVIF), and virtual mock cameras into a unified framework.
+Universal Vision MCP is a tool that allows AI agents (like Claude) to directly control the cameras connected to your computer.
+With this, your AI can see the world around you, pan and tilt network cameras, and explore its surroundings.
 
-## 🌟 Features
+## 🌟 What can it do?
 
 ![Mock Camera Preview](assets/mock-preview.png)
-<br>*(A sample view from the Mock camera as seen by the AI)*
+<br>*(Visual feedback from the AI's perspective using a Mock camera)*
 
-- **Polymorphic Embodiment**: Wraps everything from simple webcams to professional PTZ network cameras in a consistent interface.
-- **Self-Describing S-expressions**: Uses Lisp-style S-expressions to help AI intuitively understand its own physical capabilities (e.g., whether its "neck" is fixed or can pan/tilt).
-- **Autonomous Discovery**: AI can independently scan the local network to find new cameras and propose configurations to the user.
-- **Live Preview**: Allows the AI to open/close an OpenCV preview window on the host machine via tool calls.
-- **Friendly CLI**: Includes `doctor` (diagnostics) and `setup` (interactive configuration) subcommands to minimize setup friction.
+- **Supports Various Cameras**: Whether it's a built-in webcam, a USB camera, or a professional IP camera (RTSP/ONVIF), the AI treats them all with a unified interface.
+- **AI Understands Its Own "Body"**: The AI intuitively knows whether its "neck" is fixed or can pan/tilt, and acts accordingly.
+- **Autonomous Discovery**: The AI can scan your local network to find new cameras and help you set them up.
+- **Live Preview Window**: Ask the AI to "show the camera feed," and it can open a real-time preview window right on your monitor.
 
-## 🚀 Getting Started
+## 🚀 Getting Started (Fastest Way)
+
+No complex programming or cloning required. You can start in just a few steps.
 
 ### 1. Install [uv](https://docs.astral.sh/uv/)
-Install the Python package manager `uv` (if not already installed).
+Install `uv`, the lightning-fast Python runner (one-liner).
+
+**Windows (PowerShell):**
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+**macOS / Linux:**
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-### 2. Clone and Setup
+### 2. Register to Claude Desktop
+Run the following command in your terminal. This will help you add "eyes" to your Claude.
+
+```bash
+uvx --from git+https://github.com/utenadev/universal-vision-mcp universal-vision-mcp setup --setup-cmd-cd
+```
+
+Copy the **`mcpServers`** configuration snippet shown in the terminal, paste it into your `claude_desktop_config.json`, and restart Claude. That's it!
+
+## 🛠️ Handy Commands (Troubleshooting)
+
+You can run diagnostics or re-configure settings at any time without installation.
+
+```bash
+# Check if your cameras are correctly recognized (Diagnostics)
+uvx --from git+https://github.com/utenadev/universal-vision-mcp universal-vision-mcp doctor --enable-netscan
+
+# Add a network camera or change settings
+uvx --from git+https://github.com/utenadev/universal-vision-mcp universal-vision-mcp setup
+```
+
+---
+
+## 👨‍💻 For Developers
+
+If you want to customize the code or build it yourself:
+
+### Setup
 ```bash
 git clone https://github.com/utenadev/universal-vision-mcp
 cd universal-vision-mcp
 uv sync
 ```
 
-### 3. Check Hardware
+### Run/Diagnose
 ```bash
-# Diagnose hardware and preview S-expressions (self-description)
 uv run universal-vision-mcp doctor
-
-# Interactive camera setup (to add network cameras, etc.)
-uv run universal-vision-mcp setup
-```
-
-### 4. Run
-```bash
-# Start the MCP Server
 uv run universal-vision-mcp run
 ```
 
-When calling from MCP clients like Claude Desktop, set `uv run universal-vision-mcp run` as the launch command.
+## 🧠 Tech Stack & Philosophy
 
-## 🛠 Technical Stack
+- **Python 3.11+ / MCP Python SDK**: Model Context Protocol compliant.
+- **OpenCV**: Video capture and real-time preview windows.
+- **ONVIF**: PTZ (Pan-Tilt-Zoom) control for network cameras.
+- **Self-Description via S-expressions**: This server injects physical descriptions into tool descriptions:
+  ```lisp
+  (part :id garden_cam :type network :tool see_garden_cam :desc "...")
+  ```
+  This allows the LLM to gain a **"body sense" (Embodiment)**, understanding its own physical capabilities.
 
-- **Python 3.11+**
-- **MCP Python SDK**: Compliant with Model Context Protocol.
-- **OpenCV (opencv-python)**: Video capture, image processing, and preview windows.
-- **ONVIF (onvif-zeep-async)**: Pan-Tilt-Zoom control for network cameras.
-- **Zeroconf / Scapy**: Automatic network device discovery.
-- **Typer & Rich**: Elegant and user-friendly CLI interface.
+## ❤️ Acknowledgments
 
-## 🧠 Philosophy: Self-Definition via S-expressions
-
-When listing tools, this server injects a physical description (S-expression) into each tool's description field:
-
-```lisp
-(part :id garden_cam :type network :tool see_garden_cam
-  :desc "Remote network camera via RTSP.")
-(part :id neck_garden_cam :type ptz :tool look_garden_cam
-  :desc "Motorized neck for garden_cam. No permission needed.")
-```
-
-By doing this, the LLM doesn't just call a "function"—it gains a **body sense**, understanding that it has a PTZ-capable eye and can use it to explore its surroundings.
-
----
-
-## ❤️ Acknowledgments & Respect
-
-This project would not have been possible without the pioneering work of **kmizu (lifemate-ai)**.
-
-- The impact of the attempt to give AI a physical form (Embodiment) in **`embodied-claude`** and **`familiar-ai`**.
-- A nostalgic yet new user experience of interacting with AI through **Lisp S-expressions**, a dream once held by engineers.
-- We express our heartfelt gratitude for teaching us the ultimate **"Play"** of living with AI.
-
----
+This project is deeply inspired by the pioneering work of **kmizu (lifemate-ai)** (`embodied-claude`, `familiar-ai`). We owe a great debt of gratitude for the concept of giving AI a physical form.
 
 ## 📜 License
-
-MIT License - Hack and evolve freely.
+MIT License
