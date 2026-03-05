@@ -148,14 +148,17 @@ class BaseCamera(ABC):
 
         def _process():
             h, w = frame.shape[:2]
-            target_h = 640
+            # Increase resolution for better AI vision (1024px height)
+            target_h = 1024
             if h > target_h:
                 scale = target_h / h
-                resized = cv2.resize(frame, (int(w * scale), target_h))
+                # Use INTER_AREA for better downsampling quality
+                resized = cv2.resize(frame, (int(w * scale), target_h), interpolation=cv2.INTER_AREA)
             else:
                 resized = frame
 
-            success, buffer = cv2.imencode(".jpg", resized, [cv2.IMWRITE_JPEG_QUALITY, 85])
+            # Higher JPEG quality (95) to preserve fine details like fingers
+            success, buffer = cv2.imencode(".jpg", resized, [cv2.IMWRITE_JPEG_QUALITY, 95])
             if not success:
                 return None, None
 
