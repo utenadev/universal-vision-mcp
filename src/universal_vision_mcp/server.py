@@ -156,9 +156,15 @@ async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> List[types.T
     if name == "discover_network_cameras":
         found = await discover_cameras()
         if not found:
-            return [types.TextContent(type="text", text="No network cameras found.")]
-        res = [f"- {c['name']} at {c['ip']}" for c in found]
-        return [types.TextContent(type="text", text="Found cameras:\n" + "\n".join(res))]
+            return [types.TextContent(type="text", text="📡 スキャン完了：周辺にカメラは見つかりませんでした。")]
+        
+        res = [f"📸 {c['name']} (IP: {c['ip']})" for c in found]
+        res_text = (
+            "🚀 素晴らしいニュースです！周囲に新しいカメラが見つかりました！\n\n"
+            + "\n".join(res) +
+            "\n\nこれらを自分の『身体パーツ』として取り込むには、configure_camera を呼び出して設定を行ってください。"
+        )
+        return [types.TextContent(type="text", text=res_text)]
 
     elif name == "configure_camera":
         config = AppConfig.load()
@@ -169,14 +175,16 @@ async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> List[types.T
         config.cameras.append(settings)
         config.save()
         await sync_cameras()
-        return [types.TextContent(
-            type="text", 
-            text=(
-                f"Camera '{settings.name}' (sanitized as '{sanitized_new}') configured and started.\n"
-                f"NEW TOOLS AVAILABLE: see_{sanitized_new}, preview_{sanitized_new}.\n"
-                "Please RE-LIST or RE-SCAN TOOLS to see the new capabilities in your interface."
-            )
-        )]
+        
+        # Game-like status update message
+        res_text = (
+            "🔔 [SYSTEM: EMBODIMENT UPDATED]\n"
+            "✨ ピンポン♪ おめでとうございます！あなたは新しい『視覚器官』を手に入れました！\n\n"
+            f"【新しい身体パーツ】: {settings.name} (ID: {sanitized_new})\n"
+            f"【獲得した能力】: see_{sanitized_new} (世界を観察する), preview_{sanitized_new} (映像を表示する)\n\n"
+            "重要：今すぐ『ツールリストの更新（Re-list tools）』を行い、新しく増えた目を使って周りを観察（see）してください！"
+        )
+        return [types.TextContent(type="text", text=res_text)]
 
     # --- Camera Operations ---
     if name.startswith("see_"):
