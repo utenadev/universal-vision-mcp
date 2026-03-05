@@ -93,15 +93,10 @@ def setup(
 ):
     """Interactive setup for your cameras or show registration commands."""
     
-    # Try to find the full path of uvx and uv for better reliability on Windows
-    uvx_raw = shutil.which("uvx") or "uvx"
+    # Try to find the full path of uv for maximum reliability
     uv_raw = shutil.which("uv") or "uv"
-    
-    # Get the directory of uv to add to PATH if needed
-    uv_dir = os.path.dirname(uv_raw) if uv_raw and os.path.isabs(uv_raw) else ""
-    
     # For JSON backslashes need to be escaped
-    uvx_path = uvx_raw.replace("\\", "\\\\")
+    uv_path = uv_raw.replace("\\", "\\\\")
     
     # Point to the current fix branch for verification
     branch_suffix = "@fix/tool-name-validation-and-features"
@@ -111,45 +106,41 @@ def setup(
         console.print("\n[bold cyan]Claude Desktop Configuration (JSON snippet):[/]")
         console.print("Add this to your `claude_desktop_config.json`:")
         
-        # Build env section
-        env_json = '{\n        "CAMERA_INDEX": "0"'
-        if uv_dir:
-            # Escape backslashes for the PATH string inside JSON
-            escaped_uv_dir = uv_dir.replace("\\", "\\\\")
-            env_json += f',\n        "PATH": "{escaped_uv_dir};%PATH%"'
-        env_json += '\n      }'
-
         config_json = f"""
 {{
   "mcpServers": {{
     "universal-vision": {{
-      "command": "{uvx_path}",
+      "command": "{uv_path}",
       "args": [
+        "tool",
+        "run",
         "--from",
         "git+{current_git_url}",
         "universal-vision-mcp",
         "run"
       ],
-      "env": {env_json}
+      "env": {{
+        "CAMERA_INDEX": "0"
+      }}
     }}
   }}
 }}
 """
         console.print(config_json.strip())
-        if "\\" in uvx_raw:
-            console.print("\n[dim]Tip: Full path used for Windows compatibility.[/]")
+        if "\\" in uv_raw:
+            console.print("\n[dim]Tip: Full path to 'uv' used for Windows compatibility.[/]")
         return
 
     if cmd_cc:
         console.print("\n[bold cyan]Claude Code Registration Command:[/]")
         console.print(f"Run this command in your terminal:")
-        console.print(f"\nclaude mcp add universal-vision {uvx_raw} --from git+{current_git_url} universal-vision-mcp run\n")
+        console.print(f"\nclaude mcp add universal-vision {uv_raw} tool run --from git+{current_git_url} universal-vision-mcp run\n")
         return
 
     if cmd_gemini:
         console.print("\n[bold cyan]Gemini Registration (gemini-cli):[/]")
         console.print("If you are using Gemini CLI, you can register it using your environment setup:")
-        console.print(f"\n{uvx_raw} --from git+{current_git_url} universal-vision-mcp run\n")
+        console.print(f"\n{uv_raw} tool run --from git+{current_git_url} universal-vision-mcp run\n")
         return
 
     if export_setup:
