@@ -25,11 +25,17 @@ class CameraSettings(BaseModel):
     password: Optional[str] = None
     port: int = 2020
     preview: bool = False
+    # Image quality settings
+    target_height: int = 1024
+    jpeg_quality: int = 95
 
 
 class AppConfig(BaseModel):
     """Global application configuration."""
     cameras: List[CameraSettings] = Field(default_factory=list)
+    # Default quality settings for all cameras
+    default_target_height: int = 1024
+    default_jpeg_quality: int = 95
 
     @classmethod
     def load(cls) -> AppConfig:

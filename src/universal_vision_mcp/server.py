@@ -40,18 +40,25 @@ async def sync_cameras():
         sanitized = sanitize_name(settings.name)
         if sanitized in cameras:
             continue
-            
+
         try:
             cam: BaseCamera
             if settings.type == "local":
-                cam = LocalCamera(index=settings.index, name=settings.name)
+                cam = LocalCamera(
+                    index=settings.index,
+                    name=settings.name,
+                    target_height=settings.target_height,
+                    jpeg_quality=settings.jpeg_quality
+                )
             else:
                 cam = NetworkCamera(
                     host=settings.host,
                     username=settings.username,
                     password=settings.password,
                     port=settings.port,
-                    name=settings.name
+                    name=settings.name,
+                    target_height=settings.target_height,
+                    jpeg_quality=settings.jpeg_quality
                 )
             cam.start()
             cameras[cam.sanitized_name] = cam
@@ -70,7 +77,11 @@ async def sync_cameras():
             logger.info(f"Removed mock camera as real cameras are active: {name}")
     elif not real_names and not mock_names:
         logger.info("No cameras active. Adding a MockCamera for exploration.")
-        mock = MockCamera("setup_eye")
+        mock = MockCamera(
+            "setup_eye",
+            target_height=config.default_target_height,
+            jpeg_quality=config.default_jpeg_quality
+        )
         mock.start()
         cameras[mock.sanitized_name] = mock
 
