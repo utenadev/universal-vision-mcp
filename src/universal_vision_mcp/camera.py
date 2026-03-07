@@ -54,6 +54,9 @@ class BaseCamera(ABC):
     DEFAULT_JPEG_QUALITY = 95
     FLASH_DURATION = 0.5  # seconds
     
+    # Recording blink interval (seconds)
+    BLINK_INTERVAL = 1.0
+
     # Trackbar ranges
     MIN_TARGET_HEIGHT = 512
     MAX_TARGET_HEIGHT = 1568
@@ -78,6 +81,12 @@ class BaseCamera(ABC):
         
         # Trackbar state
         self._trackbar_window: str | None = None
+        
+        # Recording state
+        self._recording = False
+        self._recording_start_time: float = 0.0
+        self._blink_state: bool = True
+        self._last_blink_time: float = 0.0
 
     def on_target_height_change(self, pos: int):
         """Callback for resolution trackbar."""
@@ -166,6 +175,44 @@ class BaseCamera(ABC):
             return False
         return True
 
+    def start_recording(self):
+        """Start recording mode with OSD indicator."""
+        self._recording = True
+        self._recording_start_time = time.time()
+        self._last_blink_time = time.time()
+        logger.info(f"Recording started: {self.name}")
+
+    def stop_recording(self):
+        """Stop recording mode."""
+        self._recording = False
+        self._recording_start_time = 0.0
+        logger.info(f"Recording stopped: {self.name}")
+
+    def is_recording(self) -> bool:
+        """Check if recording is currently active."""
+        return self._recording
+
+    def get_recording_elapsed_time(self) -> float:
+        """Get elapsed recording time in seconds."""
+        if not self._recording:
+            return 0.0
+        return time.time() - self._recording_start_time
+
+    def get_blink_state(self) -> bool:
+        """Get current blink state for recording indicator."""
+        current_time = time.time()
+        if current_time - self._last_blink_time >= self.BLINK_INTERVAL:
+            self._blink_state = not self._blink_state
+            self._last_blink_time = current_time
+        return self._blink_state
+
+    def _format_recording_time(self, seconds: float) -> str:
+        """Format recording time as MM:SS."""
+        total_seconds = int(seconds)
+        minutes = total_seconds // 60
+        secs = total_seconds % 60
+        return f"{minutes:02d}:{secs:02d}"
+
     def render_osd(self, frame: np.ndarray) -> np.ndarray:
         """Render OSD (On-Screen Display) on the frame.
         
@@ -195,6 +242,33 @@ class BaseCamera(ABC):
             text_x = (w - text_w) // 2
             text_y = h // 3
             cv2.putText(output, text, (text_x, text_y), font, font_scale, (0, 255, 0), thickness, cv2.LINE_AA)
+        
+        # Draw recording indicator if recording
+        if self.is_recording():
+            # Update blink state
+            blink = self.get_blink_state()
+            
+            if blink:
+                # "● REC ..." text (top-left)
+                rec_text = "● REC ..."
+                font = cv2.FONT_HERSHEY_SIMPLEX
+                font_scale = 0.7
+                thickness = 2
+                (text_w, text_h), baseline = cv2.getTextSize(rec_text, font, font_scale, thickness)
+                text_x = 10
+                text_y = 30
+                cv2.putText(output, rec_text, (text_x, text_y), font, font_scale, (0, 0, 255), thickness, cv2.LINE_AA)
+            
+            # Elapsed time (top-right)
+            elapsed = self.get_recording_elapsed_time()
+            time_text = self._format_recording_time(elapsed)
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            font_scale = 0.6
+            thickness = 1
+            (text_w, text_h), baseline = cv2.getTextSize(time_text, font, font_scale, thickness)
+            text_x = w - text_w - 10
+            text_y = 30
+            cv2.putText(output, time_text, (text_x, text_y), font, font_scale, (0, 0, 255), thickness, cv2.LINE_AA)
         
         # Always show quality parameters at bottom
         quality_text = f"RES: {self.target_height}p | QUAL: {self.jpeg_quality}%"
