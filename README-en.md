@@ -51,6 +51,58 @@ uvx --from git+https://github.com/utenadev/universal-vision-mcp universal-vision
 
 # Add a network camera or change settings
 uvx --from git+https://github.com/utenadev/universal-vision-mcp universal-vision-mcp setup
+
+# Test capture (for quality verification)
+uvx --from git+https://github.com/utenadev/universal-vision-mcp universal-vision-mcp test-capture --name mock_eye --count 3
+```
+
+## 🆕 What's New (2026-03-07 Update)
+
+### 📸 OSD (On-Screen Display) Features
+
+Preview window now displays various information:
+
+- **Capture Flash**: Green flash overlay with "Now Capturing!!" text (0.5 seconds) when capturing
+- **Quality Parameters**: Always shows "RES: 1024p | QUAL: 95%" at the bottom of the screen
+- **Recording Indicator**: Displays "● REC ..." with elapsed time while recording (blinks every 1 second)
+
+### 🎚️ Real-time Quality Adjustment
+
+Adjust the following parameters in real-time using trackbars on the preview window:
+
+- **Resolution**: 512px to 1568px (default: 1024px)
+- **JPEG Quality**: 50% to 98% (default: 95%)
+
+### 🧪 Benchmark Tools
+
+New tools for measuring image recognition accuracy:
+
+```bash
+# Finger counting test
+uv run python src/universal_vision_mcp/benchmark_recognition.py --task finger_count --iterations 5
+
+# Text recognition test
+uv run python src/universal_vision_mcp/benchmark_recognition.py --task text_read --iterations 3
+```
+
+### 📋 Extended Configuration
+
+Manage quality settings in `~/.universal-vision-mcp/config.json`:
+
+```json
+{
+  "cameras": [
+    {
+      "name": "usb_eye_0",
+      "type": "local",
+      "index": 0,
+      "target_height": 1024,
+      "jpeg_quality": 95
+    }
+  ],
+  "default_target_height": 1024,
+  "default_jpeg_quality": 95
+}
 ```
 
 ---

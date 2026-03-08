@@ -51,6 +51,58 @@ uvx --from git+https://github.com/utenadev/universal-vision-mcp universal-vision
 
 # ネットワークカメラを追加したり、設定を変更する
 uvx --from git+https://github.com/utenadev/universal-vision-mcp universal-vision-mcp setup
+
+# テストキャプチャ（画質確認用）
+uvx --from git+https://github.com/utenadev/universal-vision-mcp universal-vision-mcp test-capture --name mock_eye --count 3
+```
+
+## 🆕 新機能（2026-03-07 更新）
+
+### 📸 OSD（オン・スクリーン・ディスプレイ）機能
+
+プレビュー画面に様々な情報を表示できるようになりました。
+
+- **キャプチャ時フラッシュ**: 画像キャプチャ時に緑色のフラッシュと「Now Capturing!!」表示（0.5 秒）
+- **画質パラメータ表示**: 画面下部に「RES: 1024p | QUAL: 95%」と常時表示
+- **Recording 表示**: 記録中に「● REC ...」と経過時間を表示（1 秒点滅）
+
+### 🎚️ リアルタイム画質調整
+
+プレビュー画面のトラックバーで、以下のパラメータをリアルタイム調整可能：
+
+- **解像度**: 512px 〜 1568px（デフォルト：1024px）
+- **JPEG 品質**: 50% 〜 98%（デフォルト：95%）
+
+### 🧪 ベンチマークツール
+
+画像認識の精度を測定するツールを追加：
+
+```bash
+# 指の本数認識テスト
+uv run python src/universal_vision_mcp/benchmark_recognition.py --task finger_count --iterations 5
+
+# 文字認識テスト
+uv run python src/universal_vision_mcp/benchmark_recognition.py --task text_read --iterations 3
+```
+
+### 📋 設定ファイルの拡張
+
+`~/.universal-vision-mcp/config.json` で画質設定を管理：
+
+```json
+{
+  "cameras": [
+    {
+      "name": "usb_eye_0",
+      "type": "local",
+      "index": 0,
+      "target_height": 1024,
+      "jpeg_quality": 95
+    }
+  ],
+  "default_target_height": 1024,
+  "default_jpeg_quality": 95
+}
 ```
 
 ---

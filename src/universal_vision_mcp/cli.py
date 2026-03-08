@@ -4,6 +4,7 @@ import asyncio
 import os
 import shutil
 import sys
+import time
 from typing import Optional
 
 import cv2
@@ -13,7 +14,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from .config import AppConfig, CameraSettings
-from .camera import LocalCamera, NetworkCamera, MockCamera, sanitize_name
+from .camera import LocalCamera, NetworkCamera, MockCamera, sanitize_name, TEST_CAPTURE_DIR
 from .scanner import discover_cameras
 
 app = typer.Typer(help="Universal Vision MCP CLI - Control your eyes and neck.")
@@ -187,6 +188,72 @@ def setup(
 
     config.save()
     console.print("\n[bold green]Configuration saved![/]")
+
+
+@app.command()
+def test_capture(
+    camera_name: str = typer.Option("mock_eye", "--name", "-n", help="Camera name to test"),
+    count: int = typer.Option(1, "--count", "-c", help="Number of test captures"),
+    interval: float = typer.Option(1.0, "--interval", "-i", help="Interval between captures in seconds"),
+):
+    """Take test captures and save to var/test_captures/."""
+    console.print(Panel(f"[bold cyan]Test Capture[/] - Testing {camera_name}"))
+    
+    # Create camera instance
+    cam: MockCamera | LocalCamera | NetworkCamera
+    if camera_name == "mock_eye" or camera_name.startswith("mock"):
+        cam = MockCamera(camera_name)
+    else:
+        # Try to find in config
+        config = AppConfig.load()
+        settings = next((c for c in config.cameras if sanitize_name(c.name) == sanitize_name(camera_name)), None)
+        if settings is None:
+            console.print(f"[red]Camera '{camera_name}' not found in config.[/]")
+            console.print("Use 'mock_eye' for test capture without hardware.")
+            raise typer.Exit(1)
+        
+        if settings.type == "local":
+            cam = LocalCamera(index=settings.index, name=settings.name, target_height=settings.target_height, jpeg_quality=settings.jpeg_quality)
+        else:
+            cam = NetworkCamera(
+                host=settings.host,
+                username=settings.username,
+                password=settings.password,
+                port=settings.port,
+                name=settings.name,
+                target_height=settings.target_height,
+                jpeg_quality=settings.jpeg_quality
+            )
+    
+    cam.start()
+    console.print(f"Started camera: {cam.name}")
+    console.print(f"Settings: {cam.target_height}p, JPEG {cam.jpeg_quality}%")
+    console.print(f"Saving to: {TEST_CAPTURE_DIR}")
+    
+    try:
+        # Wait for camera to initialize
+        console.print("\nInitializing camera...")
+        time.sleep(0.5)
+        
+        for i in range(count):
+            if count > 1:
+                console.print(f"\nCapture {i+1}/{count}...")
+            
+            result = cam.test_capture()
+            
+            if result:
+                console.print(f"[green]OK Saved:[/] {result}")
+            else:
+                console.print("[red]NG Failed to capture[/]")
+            
+            if i < count - 1:
+                time.sleep(interval)
+        
+        console.print(f"\n[bold green]Test complete![/] {count} capture(s) saved.")
+        
+    finally:
+        cam.close()
+        console.print("\nCamera resources released.")
 
 
 @app.command()

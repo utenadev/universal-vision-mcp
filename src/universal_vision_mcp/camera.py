@@ -26,6 +26,9 @@ logger = logging.getLogger(__name__)
 # Directory to save captured images
 CAPTURE_DIR = Path.home() / ".universal-vision-mcp" / "captures"
 
+# Directory to save test captures
+TEST_CAPTURE_DIR = Path(__file__).parent.parent.parent / "var" / "test_captures"
+
 
 def sanitize_name(name: str) -> str:
     """Sanitize a name to be a valid MCP tool name component.
@@ -46,7 +49,21 @@ def sanitize_name(name: str) -> str:
 class BaseCamera(ABC):
     """Abstract base class for all cameras."""
 
-    def __init__(self, name: str):
+    # Default capture settings
+    DEFAULT_TARGET_HEIGHT = 1024
+    DEFAULT_JPEG_QUALITY = 95
+    FLASH_DURATION = 0.5  # seconds
+    
+    # Recording blink interval (seconds)
+    BLINK_INTERVAL = 1.0
+
+    # Trackbar ranges
+    MIN_TARGET_HEIGHT = 512
+    MAX_TARGET_HEIGHT = 1568
+    MIN_JPEG_QUALITY = 50
+    MAX_JPEG_QUALITY = 98
+
+    def __init__(self, name: str, target_height: int = DEFAULT_TARGET_HEIGHT, jpeg_quality: int = DEFAULT_JPEG_QUALITY):
         self.name = name
         self.sanitized_name = sanitize_name(name)
         self.preview_enabled = False
@@ -55,6 +72,57 @@ class BaseCamera(ABC):
         self._thread: threading.Thread | None = None
         self._lock = threading.Lock()
         self._cap: cv2.VideoCapture | None = None
+
+        # OSD and capture settings
+        self.target_height = target_height
+        self.jpeg_quality = jpeg_quality
+        self._capture_requested = False
+        self._capture_timestamp: float = 0.0
+        
+        # Trackbar state
+        self._trackbar_window: str | None = None
+        
+        # Recording state
+        self._recording = False
+        self._recording_start_time: float = 0.0
+        self._blink_state: bool = True
+        self._last_blink_time: float = 0.0
+
+    def on_target_height_change(self, pos: int):
+        """Callback for resolution trackbar."""
+        self.target_height = pos
+        logger.debug(f"Target height changed to {pos}")
+
+    def on_jpeg_quality_change(self, pos: int):
+        """Callback for JPEG quality trackbar."""
+        self.jpeg_quality = pos
+        logger.debug(f"JPEG quality changed to {pos}")
+
+    def create_trackbars(self, window_name: str):
+        """Create OpenCV trackbars for parameter adjustment.
+        
+        Args:
+            window_name: Name of the window to attach trackbars to
+        """
+        self._trackbar_window = window_name
+        
+        # Resolution trackbar
+        cv2.createTrackbar(
+            "Resolution", window_name,
+            self.target_height,
+            self.MAX_TARGET_HEIGHT,
+            self.on_target_height_change
+        )
+        # Set minimum value (trackbars don't support min directly, use callback)
+        self.on_target_height_change(self.target_height)
+        
+        # JPEG quality trackbar
+        cv2.createTrackbar(
+            "JPEG Quality", window_name,
+            self.jpeg_quality,
+            self.MAX_JPEG_QUALITY,
+            self.on_jpeg_quality_change
+        )
 
     @abstractmethod
     def get_body_description(self) -> str:
@@ -88,9 +156,131 @@ class BaseCamera(ABC):
         """Enable or disable live preview window."""
         self.preview_enabled = enabled
         if not enabled:
-            # We can't easily close specific windows from a thread in some OS, 
+            # We can't easily close specific windows from a thread in some OS,
             # so we let the loop handle it or just clear it.
             pass
+
+    def trigger_capture(self):
+        """Trigger a capture request with OSD flash feedback."""
+        self._capture_requested = True
+        self._capture_timestamp = time.time()
+
+    def is_flash_active(self) -> bool:
+        """Check if flash effect should be displayed (within FLASH_DURATION)."""
+        if not self._capture_requested:
+            return False
+        elapsed = time.time() - self._capture_timestamp
+        if elapsed > self.FLASH_DURATION:
+            self._capture_requested = False
+            return False
+        return True
+
+    def start_recording(self):
+        """Start recording mode with OSD indicator."""
+        self._recording = True
+        self._recording_start_time = time.time()
+        self._last_blink_time = time.time()
+        logger.info(f"Recording started: {self.name}")
+
+    def stop_recording(self):
+        """Stop recording mode."""
+        self._recording = False
+        self._recording_start_time = 0.0
+        logger.info(f"Recording stopped: {self.name}")
+
+    def is_recording(self) -> bool:
+        """Check if recording is currently active."""
+        return self._recording
+
+    def get_recording_elapsed_time(self) -> float:
+        """Get elapsed recording time in seconds."""
+        if not self._recording:
+            return 0.0
+        return time.time() - self._recording_start_time
+
+    def get_blink_state(self) -> bool:
+        """Get current blink state for recording indicator."""
+        current_time = time.time()
+        if current_time - self._last_blink_time >= self.BLINK_INTERVAL:
+            self._blink_state = not self._blink_state
+            self._last_blink_time = current_time
+        return self._blink_state
+
+    def _format_recording_time(self, seconds: float) -> str:
+        """Format recording time as MM:SS."""
+        total_seconds = int(seconds)
+        minutes = total_seconds // 60
+        secs = total_seconds % 60
+        return f"{minutes:02d}:{secs:02d}"
+
+    def render_osd(self, frame: np.ndarray) -> np.ndarray:
+        """Render OSD (On-Screen Display) on the frame.
+        
+        Args:
+            frame: Input frame image
+            
+        Returns:
+            Frame with OSD rendered
+        """
+        # Create a copy to avoid modifying original
+        output = frame.copy()
+        h, w = output.shape[:2]
+        
+        # Draw flash overlay if capture was just triggered
+        if self.is_flash_active():
+            # Semi-transparent green flash
+            overlay = output.copy()
+            cv2.rectangle(overlay, (0, 0), (w, h), (0, 255, 0), -1)
+            cv2.addWeighted(overlay, 0.3, output, 0.7, 0, output)
+            
+            # "Now Capturing!!" text
+            text = "Now Capturing!!"
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            font_scale = 1.5
+            thickness = 3
+            (text_w, text_h), baseline = cv2.getTextSize(text, font, font_scale, thickness)
+            text_x = (w - text_w) // 2
+            text_y = h // 3
+            cv2.putText(output, text, (text_x, text_y), font, font_scale, (0, 255, 0), thickness, cv2.LINE_AA)
+        
+        # Draw recording indicator if recording
+        if self.is_recording():
+            # Update blink state
+            blink = self.get_blink_state()
+            
+            if blink:
+                # "● REC ..." text (top-left)
+                rec_text = "● REC ..."
+                font = cv2.FONT_HERSHEY_SIMPLEX
+                font_scale = 0.7
+                thickness = 2
+                (text_w, text_h), baseline = cv2.getTextSize(rec_text, font, font_scale, thickness)
+                text_x = 10
+                text_y = 30
+                cv2.putText(output, rec_text, (text_x, text_y), font, font_scale, (0, 0, 255), thickness, cv2.LINE_AA)
+            
+            # Elapsed time (top-right)
+            elapsed = self.get_recording_elapsed_time()
+            time_text = self._format_recording_time(elapsed)
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            font_scale = 0.6
+            thickness = 1
+            (text_w, text_h), baseline = cv2.getTextSize(time_text, font, font_scale, thickness)
+            text_x = w - text_w - 10
+            text_y = 30
+            cv2.putText(output, time_text, (text_x, text_y), font, font_scale, (0, 0, 255), thickness, cv2.LINE_AA)
+        
+        # Always show quality parameters at bottom
+        quality_text = f"RES: {self.target_height}p | QUAL: {self.jpeg_quality}%"
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 0.6
+        thickness = 1
+        (text_w, text_h), baseline = cv2.getTextSize(quality_text, font, font_scale, thickness)
+        text_x = 10
+        text_y = h - 10
+        cv2.putText(output, quality_text, (text_x, text_y), font, font_scale, (0, 255, 255), thickness, cv2.LINE_AA)
+        
+        return output
 
     def _capture_loop(self):
         """Background thread to keep camera buffer fresh."""
@@ -122,7 +312,13 @@ class BaseCamera(ABC):
                     self._last_frame = frame.copy()
 
                 if self.preview_enabled:
-                    cv2.imshow(window_name, frame)
+                    # Create trackbars on first preview
+                    if self._trackbar_window is None:
+                        self.create_trackbars(window_name)
+                    
+                    # Render OSD on preview
+                    frame_with_osd = self.render_osd(frame)
+                    cv2.imshow(window_name, frame_with_osd)
                     if cv2.waitKey(1) & 0xFF == ord('q'):
                         self.preview_enabled = False
                 else:
@@ -173,6 +369,48 @@ class BaseCamera(ABC):
 
         return await asyncio.to_thread(_process)
 
+    def test_capture(self) -> str | None:
+        """Take a test capture and save to var/test_captures/.
+        
+        Returns:
+            Path to saved file, or None if capture failed
+        """
+        # Trigger OSD flash
+        self.trigger_capture()
+        
+        frame = None
+        with self._lock:
+            if self._last_frame is not None:
+                frame = self._last_frame.copy()
+
+        if frame is None:
+            return None
+
+        def _process():
+            h, w = frame.shape[:2]
+            
+            # Resize to target height
+            if h > self.target_height:
+                scale = self.target_height / h
+                resized = cv2.resize(frame, (int(w * scale), self.target_height), interpolation=cv2.INTER_AREA)
+            else:
+                resized = frame
+
+            # Encode with current quality setting
+            success, buffer = cv2.imencode(".jpg", resized, [cv2.IMWRITE_JPEG_QUALITY, self.jpeg_quality])
+            if not success:
+                return None
+
+            data = buffer.tobytes()
+            
+            # Save to test_captures directory
+            TEST_CAPTURE_DIR.mkdir(parents=True, exist_ok=True)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            save_path = TEST_CAPTURE_DIR / f"{self.sanitized_name}_test_{timestamp}.jpg"
+            save_path.write_bytes(data)
+            return str(save_path)
+
+        return _process()
 
     async def move(self, direction: str, degrees: int = 30) -> str:
         """Move the camera (PTZ). Default implementation does nothing."""
@@ -182,9 +420,9 @@ class BaseCamera(ABC):
 class LocalCamera(BaseCamera):
     """USB or Built-in camera implementation."""
 
-    def __init__(self, index: int, name: str = ""):
+    def __init__(self, index: int, name: str = "", target_height: int = BaseCamera.DEFAULT_TARGET_HEIGHT, jpeg_quality: int = BaseCamera.DEFAULT_JPEG_QUALITY):
         name = name or f"usb_cam_{index}"
-        super().__init__(name)
+        super().__init__(name, target_height=target_height, jpeg_quality=jpeg_quality)
         self.index = index
 
     def _get_stream_source(self) -> int:
@@ -212,8 +450,10 @@ class NetworkCamera(BaseCamera):
         password: Optional[str] = None,
         port: int = 2020,
         name: str = "network_cam",
+        target_height: int = BaseCamera.DEFAULT_TARGET_HEIGHT,
+        jpeg_quality: int = BaseCamera.DEFAULT_JPEG_QUALITY,
     ):
-        super().__init__(name)
+        super().__init__(name, target_height=target_height, jpeg_quality=jpeg_quality)
         self.host = host
         self.username = username
         self.password = password
@@ -294,8 +534,8 @@ class NetworkCamera(BaseCamera):
 class MockCamera(BaseCamera):
     """A virtual camera that generates 'NO SIGNAL' images. Useful for testing."""
 
-    def __init__(self, name: str = "mock_cam"):
-        super().__init__(name)
+    def __init__(self, name: str = "mock_cam", target_height: int = BaseCamera.DEFAULT_TARGET_HEIGHT, jpeg_quality: int = BaseCamera.DEFAULT_JPEG_QUALITY):
+        super().__init__(name, target_height=target_height, jpeg_quality=jpeg_quality)
 
     def _get_stream_source(self) -> Any:
         return None
@@ -349,7 +589,13 @@ class MockCamera(BaseCamera):
                 self._last_frame = frame
 
             if self.preview_enabled:
-                cv2.imshow(window_name, frame)
+                # Create trackbars on first preview
+                if self._trackbar_window is None:
+                    self.create_trackbars(window_name)
+                
+                # Render OSD on preview
+                frame_with_osd = self.render_osd(frame)
+                cv2.imshow(window_name, frame_with_osd)
                 cv2.waitKey(1)
             else:
                 try:
