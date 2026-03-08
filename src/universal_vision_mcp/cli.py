@@ -233,22 +233,32 @@ def test_capture(
     try:
         # Wait for camera to initialize
         console.print("\nInitializing camera...")
-        time.sleep(0.5)
-        
+        time.sleep(1.0)  # Increased from 0.5s for reliable camera initialization
+
+        # Retry logic for first capture
+        max_retries = 2
         for i in range(count):
             if count > 1:
                 console.print(f"\nCapture {i+1}/{count}...")
-            
-            result = cam.test_capture()
-            
+
+            # Retry logic for failed captures
+            result = None
+            for retry in range(max_retries):
+                result = cam.test_capture()
+                if result:
+                    break
+                if retry < max_retries - 1:
+                    console.print(f"[yellow]Retry {retry + 1}/{max_retries}...[/]")
+                    time.sleep(0.5)
+
             if result:
                 console.print(f"[green]OK Saved:[/] {result}")
             else:
                 console.print("[red]NG Failed to capture[/]")
-            
+
             if i < count - 1:
                 time.sleep(interval)
-        
+
         console.print(f"\n[bold green]Test complete![/] {count} capture(s) saved.")
         
     finally:
