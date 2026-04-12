@@ -104,6 +104,13 @@ class BaseCamera(ABC):
         Args:
             window_name: Name of the window to attach trackbars to
         """
+        # Ensure window exists and is recognized by OS before creating trackbars
+        cv2.namedWindow(window_name)
+        # Show a tiny black frame to realize the window
+        dummy = np.zeros((1, 1, 3), np.uint8)
+        cv2.imshow(window_name, dummy)
+        cv2.waitKey(1)
+        
         self._trackbar_window = window_name
         
         # Resolution trackbar
