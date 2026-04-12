@@ -153,9 +153,12 @@ captures/
 logs/
 config.yaml
 
-# beads issue tracker (SQLite only, JSONL is auto-generated)
-.beads/*.jsonl
-.beads/audit/
+# beads issue tracker
+.beads/
 
 # bv (beads viewer) local config and caches
 .bv/
+
+# IDE/Tool settings
+.gemini/
+.qwen/

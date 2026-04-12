@@ -14,7 +14,13 @@ from rich.panel import Panel
 from rich.table import Table
 
 from .config import AppConfig, CameraSettings
-from .camera import LocalCamera, NetworkCamera, MockCamera, sanitize_name, TEST_CAPTURE_DIR
+from .camera import (
+    LocalCamera,
+    NetworkCamera,
+    MockCamera,
+    sanitize_name,
+    TEST_CAPTURE_DIR,
+)
 from .scanner import discover_cameras
 
 app = typer.Typer(help="Universal Vision MCP CLI - Control your eyes and neck.")
@@ -25,7 +31,11 @@ GITHUB_URL = "https://github.com/utenadev/universal-vision-mcp"
 
 @app.command()
 def doctor(
-    enable_netscan: bool = typer.Option(False, "--enable-netscan", help="Enable network camera scanning (may take a few seconds)")
+    enable_netscan: bool = typer.Option(
+        False,
+        "--enable-netscan",
+        help="Enable network camera scanning (may take a few seconds)",
+    ),
 ):
     """Diagnose local hardware, network cameras, and show S-expression descriptions."""
     console.print(Panel("[bold cyan]Universal Vision Doctor[/] - Running diagnosis..."))
@@ -43,10 +53,12 @@ def doctor(
             name = f"usb_eye_{i}"
             cam = LocalCamera(index=i, name=name)
             s_expr = cam.get_body_description()
-            
+
             w = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
             h = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
-            table.add_row(str(i), cam.sanitized_name, f"AVAILABLE ({int(w)}x{int(h)})", s_expr)
+            table.add_row(
+                str(i), cam.sanitized_name, f"AVAILABLE ({int(w)}x{int(h)})", s_expr
+            )
             cap.release()
         else:
             table.add_row(str(i), "-", "NOT FOUND", "-")
@@ -55,27 +67,30 @@ def doctor(
 
     # 2. Network Discovery
     if enable_netscan:
-        console.print("\n[bold cyan]Scanning Network for Cameras...[/] (mDNS / PortScan)")
+        console.print(
+            "\n[bold cyan]Scanning Network for Cameras...[/] (mDNS / PortScan)"
+        )
         found = asyncio.run(discover_cameras())
-        
+
         if found:
             net_table = Table(title="Network Cameras (Found)")
             net_table.add_column("IP", style="cyan")
             net_table.add_column("Source", style="green")
             net_table.add_column("Sanitized Name", style="magenta")
             net_table.add_column("Body Definition (S-expression)", style="yellow")
-            
+
             for c in found:
-                # Create a temporary NetworkCamera instance for S-expression preview
-                cam = NetworkCamera(host=c['ip'], name=c.get('name', 'network_eye'))
+                cam = NetworkCamera(host=c["ip"], name=c.get("name", "network_eye"))
                 s_expr = cam.get_body_description()
-                net_table.add_row(c['ip'], c['source'], cam.sanitized_name, s_expr)
-                
+                net_table.add_row(c["ip"], c["source"], cam.sanitized_name, s_expr)
+
             console.print(net_table)
         else:
-            console.print("  [yellow]No network cameras found on the local segment.[/]")
+            console.print(" [yellow]No network cameras found on the local segment.[/]")
     else:
-        console.print("\n[dim]Network scan skipped. Use --enable-netscan to scan network cameras.[/]")
+        console.print(
+            "\n[dim]Network scan skipped. Use --enable-netscan to scan network cameras.[/]"
+        )
 
     # 3. Virtual/Mock (Fallback)
     console.print("\n[bold cyan]Mock/Virtual (Fallback) Definition:[/]")
@@ -87,26 +102,33 @@ def doctor(
 
 @app.command()
 def setup(
-    cmd_cd: bool = typer.Option(False, "--setup-cmd-cd", help="Show Claude Desktop registration JSON"),
-    cmd_cc: bool = typer.Option(False, "--setup-cmd-cc", help="Show Claude Code registration command"),
-    cmd_gemini: bool = typer.Option(False, "--setup-cmd-gemini", help="Show Gemini registration instruction"),
-    export_setup: bool = typer.Option(False, "--export-setup", help="Export current configuration to setup.json in the current directory"),
+    cmd_cd: bool = typer.Option(
+        False, "--setup-cmd-cd", help="Show Claude Desktop registration JSON"
+    ),
+    cmd_cc: bool = typer.Option(
+        False, "--setup-cmd-cc", help="Show Claude Code registration command"
+    ),
+    cmd_gemini: bool = typer.Option(
+        False, "--setup-cmd-gemini", help="Show Gemini registration instruction"
+    ),
+    export_setup: bool = typer.Option(
+        False,
+        "--export-setup",
+        help="Export current configuration to setup.json in the current directory",
+    ),
 ):
     """Interactive setup for your cameras or show registration commands."""
-    
-    # Try to find the full path of uv for maximum reliability
+
     uv_raw = shutil.which("uv") or "uv"
-    # For JSON backslashes need to be escaped
     uv_path = uv_raw.replace("\\", "\\\\")
-    
-    # Point to the current fix branch for verification
+
     branch_suffix = "@fix/tool-name-validation-and-features"
     current_git_url = f"{GITHUB_URL}{branch_suffix}"
 
     if cmd_cd:
         console.print("\n[bold cyan]Claude Desktop Configuration (JSON snippet):[/]")
         console.print("Add this to your `claude_desktop_config.json`:")
-        
+
         config_json = f"""
 {{
   "mcpServers": {{
@@ -129,19 +151,27 @@ def setup(
 """
         console.print(config_json.strip())
         if "\\" in uv_raw:
-            console.print("\n[dim]Tip: Full path to 'uv' used for Windows compatibility.[/]")
+            console.print(
+                "\n[dim]Tip: Full path to 'uv' used for Windows compatibility.[/]"
+            )
         return
 
     if cmd_cc:
         console.print("\n[bold cyan]Claude Code Registration Command:[/]")
-        console.print(f"Run this command in your terminal:")
-        console.print(f"\nclaude mcp add universal-vision {uv_raw} tool run --from git+{current_git_url} universal-vision-mcp run\n")
+        console.print("Run this command in your terminal:")
+        console.print(
+            f"\nclaude mcp add universal-vision {uv_raw} tool run --from git+{current_git_url} universal-vision-mcp run\n"
+        )
         return
 
     if cmd_gemini:
         console.print("\n[bold cyan]Gemini Registration (gemini-cli):[/]")
-        console.print("If you are using Gemini CLI, you can register it using your environment setup:")
-        console.print(f"\n{uv_raw} tool run --from git+{current_git_url} universal-vision-mcp run\n")
+        console.print(
+            "If you are using Gemini CLI, you can register it using your environment setup:"
+        )
+        console.print(
+            f"\n{uv_raw} tool run --from git+{current_git_url} universal-vision-mcp run\n"
+        )
         return
 
     if export_setup:
@@ -153,9 +183,10 @@ def setup(
         return
 
     config = AppConfig.load()
-    console.print(Panel("[bold green]Interactive Setup[/] - Let's configure your eyes!"))
+    console.print(
+        Panel("[bold green]Interactive Setup[/] - Let's configure your eyes!")
+    )
 
-    # Auto-detect local cams
     auto_detect = typer.confirm("Do you want to auto-detect and add local USB cameras?")
     if auto_detect:
         for i in range(4):
@@ -163,11 +194,12 @@ def setup(
             if cap.isOpened():
                 name = f"usb_eye_{i}"
                 if not any(c.index == i and c.type == "local" for c in config.cameras):
-                    config.cameras.append(CameraSettings(name=name, type="local", index=i))
+                    config.cameras.append(
+                        CameraSettings(name=name, type="local", index=i)
+                    )
                     console.print(f"Added [cyan]{name}[/] (Local Camera {i})")
                 cap.release()
 
-    # Manual Network Add
     add_net = typer.confirm("Do you want to add a Network (IP) Camera?")
     if add_net:
         name = typer.prompt("Camera name (e.g. garden_cam)", default="network_cam")
@@ -176,14 +208,16 @@ def setup(
         password = typer.prompt("Password (optional)", default="", hide_input=True)
         port = int(typer.prompt("ONVIF Port", default="2020"))
 
-        config.cameras.append(CameraSettings(
-            name=name,
-            type="network",
-            host=host,
-            username=username if username else None,
-            password=password if password else None,
-            port=port
-        ))
+        config.cameras.append(
+            CameraSettings(
+                name=name,
+                type="network",
+                host=host,
+                username=username if username else None,
+                password=password if password else None,
+                port=port,
+            )
+        )
         console.print(f"Added [cyan]{name}[/] (Network Camera at {host})")
 
     config.save()
@@ -192,28 +226,42 @@ def setup(
 
 @app.command()
 def test_capture(
-    camera_name: str = typer.Option("mock_eye", "--name", "-n", help="Camera name to test"),
+    camera_name: str = typer.Option(
+        "mock_eye", "--name", "-n", help="Camera name to test"
+    ),
     count: int = typer.Option(1, "--count", "-c", help="Number of test captures"),
-    interval: float = typer.Option(1.0, "--interval", "-i", help="Interval between captures in seconds"),
+    interval: float = typer.Option(
+        1.0, "--interval", "-i", help="Interval between captures in seconds"
+    ),
 ):
     """Take test captures and save to var/test_captures/."""
     console.print(Panel(f"[bold cyan]Test Capture[/] - Testing {camera_name}"))
-    
-    # Create camera instance
+
     cam: MockCamera | LocalCamera | NetworkCamera
     if camera_name == "mock_eye" or camera_name.startswith("mock"):
         cam = MockCamera(camera_name)
     else:
-        # Try to find in config
         config = AppConfig.load()
-        settings = next((c for c in config.cameras if sanitize_name(c.name) == sanitize_name(camera_name)), None)
+        settings = next(
+            (
+                c
+                for c in config.cameras
+                if sanitize_name(c.name) == sanitize_name(camera_name)
+            ),
+            None,
+        )
         if settings is None:
             console.print(f"[red]Camera '{camera_name}' not found in config.[/]")
             console.print("Use 'mock_eye' for test capture without hardware.")
             raise typer.Exit(1)
-        
+
         if settings.type == "local":
-            cam = LocalCamera(index=settings.index, name=settings.name, target_height=settings.target_height, jpeg_quality=settings.jpeg_quality)
+            cam = LocalCamera(
+                index=settings.index,
+                name=settings.name,
+                target_height=settings.target_height,
+                jpeg_quality=settings.jpeg_quality,
+            )
         else:
             cam = NetworkCamera(
                 host=settings.host,
@@ -222,26 +270,23 @@ def test_capture(
                 port=settings.port,
                 name=settings.name,
                 target_height=settings.target_height,
-                jpeg_quality=settings.jpeg_quality
+                jpeg_quality=settings.jpeg_quality,
             )
-    
+
     cam.start()
     console.print(f"Started camera: {cam.name}")
     console.print(f"Settings: {cam.target_height}p, JPEG {cam.jpeg_quality}%")
     console.print(f"Saving to: {TEST_CAPTURE_DIR}")
-    
-    try:
-        # Wait for camera to initialize
-        console.print("\nInitializing camera...")
-        time.sleep(1.0)  # Increased from 0.5s for reliable camera initialization
 
-        # Retry logic for first capture
+    try:
+        console.print("\nInitializing camera...")
+        time.sleep(1.0)
+
         max_retries = 2
         for i in range(count):
             if count > 1:
-                console.print(f"\nCapture {i+1}/{count}...")
+                console.print(f"\nCapture {i + 1}/{count}...")
 
-            # Retry logic for failed captures
             result = None
             for retry in range(max_retries):
                 result = cam.test_capture()
@@ -260,18 +305,80 @@ def test_capture(
                 time.sleep(interval)
 
         console.print(f"\n[bold green]Test complete![/] {count} capture(s) saved.")
-        
+
     finally:
         cam.close()
         console.print("\nCamera resources released.")
 
 
 @app.command()
-def run():
-    """Start the MCP Server."""
-    import asyncio
-    from .server import main as server_main
-    asyncio.run(server_main())
+def run(
+    http: bool = typer.Option(
+        False,
+        "--http",
+        help="Run with HTTP transport (SSE + Streamable HTTP) instead of stdio",
+    ),
+    lan: bool = typer.Option(
+        False,
+        "--lan",
+        help="Bind to 0.0.0.0 for LAN access (only for HTTP mode). Default binds to 127.0.0.1",
+    ),
+    host: str = typer.Option(
+        "127.0.0.1",
+        "--host",
+        help="Host to bind to (only for HTTP mode). Use --lan for automatic LAN binding.",
+    ),
+    port: int = typer.Option(
+        8000,
+        "--port",
+        help="Port to listen on (only for HTTP mode)",
+    ),
+):
+    """Start the MCP Server.
+
+    By default runs in stdio mode. Use --http for SSE/Streamable HTTP transport.
+    Use --lan with --http to allow LAN connections.
+    """
+    if not http:
+        import asyncio
+        from .server import main as server_main
+
+        console.print(Panel("[bold cyan]Starting MCP Server (stdio mode)[/]"))
+        asyncio.run(server_main())
+        return
+
+    # HTTP mode
+    actual_host = "0.0.0.0" if lan else host
+
+    if lan:
+        console.print(
+            Panel(
+                f"[bold cyan]Starting MCP Server (HTTP mode - LAN)[/]\n\n"
+                f"Host: {actual_host} (LAN mode)\n"
+                f"Port: {port}\n\n"
+                f"[yellow]⚠️ LAN Mode: Server accepts connections from other machines.[/]\n"
+                f"[dim]Use only in trusted networks. No authentication provided.[/]\n\n"
+                f"Endpoints:\n"
+                f"  - SSE: http://<your-ip>:{port}/sse\n"
+                f"  - Streamable HTTP: http://<your-ip>:{port}/mcp"
+            )
+        )
+    else:
+        console.print(
+            Panel(
+                f"[bold cyan]Starting MCP Server (HTTP mode)[/]\n\n"
+                f"Host: {actual_host}\n"
+                f"Port: {port}\n\n"
+                f"Endpoints:\n"
+                f"  - SSE: http://{actual_host}:{port}/sse\n"
+                f"  - Streamable HTTP: http://{actual_host}:{port}/mcp\n\n"
+                f"[dim]Use --lan to allow LAN connections.[/]"
+            )
+        )
+
+    from .http_server import run_http_server
+
+    run_http_server(host=actual_host, port=port)
 
 
 def main():
